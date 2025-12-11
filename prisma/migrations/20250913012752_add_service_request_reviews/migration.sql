@@ -1,0 +1,15 @@
+-- DropForeignKey
+ALTER TABLE `REVIEWS` DROP FOREIGN KEY `REVIEWS_serviceListingId_fkey`;
+
+-- AlterTable
+ALTER TABLE `REVIEWS` ADD COLUMN `serviceRequestId` INTEGER NULL,
+    MODIFY `serviceListingId` INTEGER NULL;
+
+-- CreateIndex
+CREATE INDEX `REVIEWS_serviceRequestId_fkey` ON `REVIEWS`(`serviceRequestId`);
+
+-- AddForeignKey
+ALTER TABLE `REVIEWS` ADD CONSTRAINT `REVIEWS_serviceListingId_fkey` FOREIGN KEY (`serviceListingId`) REFERENCES `SERVICE_LISTINGS`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `REVIEWS` ADD CONSTRAINT `REVIEWS_serviceRequestId_fkey` FOREIGN KEY (`serviceRequestId`) REFERENCES `SERVICE_REQUESTS`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

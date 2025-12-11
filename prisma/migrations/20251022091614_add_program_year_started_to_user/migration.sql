@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `USERS` ADD COLUMN `program` VARCHAR(191) NULL,
+    ADD COLUMN `yearStarted` INTEGER NULL;

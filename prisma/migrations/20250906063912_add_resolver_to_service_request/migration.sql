@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `SERVICE_REQUESTS` ADD COLUMN `resolverId` INTEGER NULL;
+
+-- CreateIndex
+CREATE INDEX `SERVICE_REQUESTS_resolverId_fkey` ON `SERVICE_REQUESTS`(`resolverId`);

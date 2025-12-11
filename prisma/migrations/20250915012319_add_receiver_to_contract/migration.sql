@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE `CONTRACTS` ADD COLUMN `receiverId` INTEGER NULL;
+
+-- CreateIndex
+CREATE INDEX `CONTRACTS_receiverId_fkey` ON `CONTRACTS`(`receiverId`);
+
+-- AddForeignKey
+ALTER TABLE `CONTRACTS` ADD CONSTRAINT `CONTRACTS_receiverId_fkey` FOREIGN KEY (`receiverId`) REFERENCES `USERS`(`userId`) ON DELETE SET NULL ON UPDATE CASCADE;

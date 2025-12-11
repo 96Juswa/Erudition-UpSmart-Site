@@ -1,0 +1,105 @@
+/*
+  Warnings:
+
+  - You are about to drop the `BOOKINGS` table. If the table is not empty, all the data it contains will be lost.
+
+*/
+-- DropForeignKey
+ALTER TABLE `BOOKINGS` DROP FOREIGN KEY `BOOKINGS_clientId_fkey`;
+
+-- DropForeignKey
+ALTER TABLE `BOOKINGS` DROP FOREIGN KEY `BOOKINGS_serviceListingId_fkey`;
+
+-- DropForeignKey
+ALTER TABLE `BOOKINGS` DROP FOREIGN KEY `BOOKINGS_serviceRequestId_fkey`;
+
+-- DropForeignKey
+ALTER TABLE `PAYMENTS` DROP FOREIGN KEY `PAYMENTS_bookingId_fkey`;
+
+-- DropIndex
+DROP INDEX `PAYMENTS_bookingId_fkey` ON `PAYMENTS`;
+
+-- DropTable
+DROP TABLE `BOOKINGS`;
+
+-- CreateTable
+CREATE TABLE `Booking` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `clientId` INTEGER NOT NULL,
+    `serviceListingId` INTEGER NOT NULL,
+    `serviceRequestId` INTEGER NULL,
+    `bookingDate` DATE NOT NULL,
+    `totalPrice` DECIMAL(10, 2) NOT NULL,
+    `paymentStatus` CHAR(50) NOT NULL,
+    `paymentDue` DATE NOT NULL,
+    `status` ENUM('SERVICE_REQUESTED', 'SERVICE_PROPOSAL_SENT', 'NEGOTIATING', 'CONFIRMED', 'DECLINED', 'CANCELED', 'IN_PROGRESS', 'IDLE', 'COMPLETED', 'AWAITING_PAYMENT', 'AWAITING_REVIEW') NOT NULL DEFAULT 'SERVICE_REQUESTED',
+    `latestProposalId` INTEGER NULL,
+
+    UNIQUE INDEX `Booking_serviceRequestId_key`(`serviceRequestId`),
+    UNIQUE INDEX `Booking_latestProposalId_key`(`latestProposalId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `BOOKING_PROPOSALS` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `bookingId` INTEGER NULL,
+    `senderId` INTEGER NOT NULL,
+    `receiverId` INTEGER NOT NULL,
+    `serviceListingId` INTEGER NULL,
+    `serviceRequestId` INTEGER NULL,
+    `description` TEXT NOT NULL,
+    `price` DECIMAL(10, 2) NOT NULL,
+    `deadline` DATETIME(3) NULL,
+    `attachments` TEXT NULL,
+    `contractUrl` TEXT NULL,
+    `status` ENUM('PENDING', 'ACCEPTED', 'DECLINED', 'MODIFIED') NOT NULL DEFAULT 'PENDING',
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `CONTRACTS` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `bookingId` INTEGER NOT NULL,
+    `proposalId` INTEGER NOT NULL,
+    `fileUrl` TEXT NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_latestProposalId_fkey` FOREIGN KEY (`latestProposalId`) REFERENCES `BOOKING_PROPOSALS`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_clientId_fkey` FOREIGN KEY (`clientId`) REFERENCES `USERS`(`userId`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_serviceListingId_fkey` FOREIGN KEY (`serviceListingId`) REFERENCES `SERVICE_LISTINGS`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_serviceRequestId_fkey` FOREIGN KEY (`serviceRequestId`) REFERENCES `SERVICE_REQUESTS`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `BOOKING_PROPOSALS` ADD CONSTRAINT `BOOKING_PROPOSALS_senderId_fkey` FOREIGN KEY (`senderId`) REFERENCES `USERS`(`userId`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `BOOKING_PROPOSALS` ADD CONSTRAINT `BOOKING_PROPOSALS_receiverId_fkey` FOREIGN KEY (`receiverId`) REFERENCES `USERS`(`userId`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `BOOKING_PROPOSALS` ADD CONSTRAINT `BOOKING_PROPOSALS_serviceListingId_fkey` FOREIGN KEY (`serviceListingId`) REFERENCES `SERVICE_LISTINGS`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `BOOKING_PROPOSALS` ADD CONSTRAINT `BOOKING_PROPOSALS_serviceRequestId_fkey` FOREIGN KEY (`serviceRequestId`) REFERENCES `SERVICE_REQUESTS`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `CONTRACTS` ADD CONSTRAINT `CONTRACTS_bookingId_fkey` FOREIGN KEY (`bookingId`) REFERENCES `Booking`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `CONTRACTS` ADD CONSTRAINT `CONTRACTS_proposalId_fkey` FOREIGN KEY (`proposalId`) REFERENCES `BOOKING_PROPOSALS`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENTS` ADD CONSTRAINT `PAYMENTS_bookingId_fkey` FOREIGN KEY (`bookingId`) REFERENCES `Booking`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

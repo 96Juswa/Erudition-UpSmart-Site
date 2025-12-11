@@ -1,0 +1,850 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  userId                   Int                    @id @default(autoincrement())
+  email                    String                 @unique
+  password                 String
+  firstName                String
+  middleName               String?
+  lastName                 String
+  profilePicture           String?
+  program                  String?
+  yearStarted              Int?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  bookingChangeRequests    BookingChangeRequest[] @relation("RequestedChanges")
+  receivedBookingProposals BookingProposal[]      @relation("ReceivedBookingProposals")
+  sentBookingProposals     BookingProposal[]      @relation("SentBookingProposals")
+  bookings                 Booking[]
+  clientProfile            ClientProfile?
+  comments                 Comment[]
+  messagesReceived         Message[]              @relation("ReceivedMessages")
+  messagesSent             Message[]              @relation("SentMessages")
+  portfolios               Portfolio[]
+  progressUpdates          ProgressUpdate[]
+  reportsResolved          Report[]               @relation("AdminReports")
+  reportsReceived          Report[]               @relation("ReportedReports")
+  reportsFiled             Report[]               @relation("ReporterReports")
+  resolverProfile          ResolverProfile?
+  reviewsReceived          Review[]               @relation("ReviewsReceived")
+  reviewsGiven             Review[]               @relation("ReviewsGiven")
+  serviceListings          ServiceListing[]
+  serviceRequests          ServiceRequest[]
+  userRoles                UserRole[]
+  conversations            Conversation[]         @relation("ConversationParticipants")
+  receivedContracts        Contract[]             @relation("ReceivedContracts")
+  providedContracts        Contract[]             @relation("ProvidedContracts")
+
+  // ADD THESE NEW RELATIONS:
+  adminActions        AdminAction[]    @relation("AdminActions")
+  moderationActions   UserModeration[] @relation("Moderator")
+  moderationRecords   UserModeration[] @relation("ModeratedUser")
+  contentFlagged      ContentFlag[]    @relation("ContentFlagger")
+  contentReviewed     ContentFlag[]    @relation("ContentReviewer")
+  createdPaymentPlans PaymentPlan[]    @relation("CreatedPaymentPlans")
+  loggedPayments      PaymentLog[]     @relation("LoggedPayments")
+
+  transactionFeeLogs TransactionFeeLog[]
+
+  @@map("USERS")
+}
+
+model Role {
+  roleId    Int        @id @default(autoincrement())
+  roleName  RoleName   @unique
+  userRoles UserRole[]
+
+  @@map("ROLES")
+}
+
+model UserRole {
+  userId Int
+  roleId Int
+  role   Role @relation(fields: [roleId], references: [roleId])
+  user   User @relation(fields: [userId], references: [userId])
+
+  @@id([userId, roleId])
+  @@index([roleId], map: "USER_ROLES_roleId_fkey")
+  @@map("USER_ROLES")
+}
+
+model ClientProfile {
+  clientProfileId Int     @id @default(autoincrement())
+  userId          Int     @unique
+  bio             String?
+
+  // --- API OUTPUT STORAGE ---
+  trustRating Float @default(0) // (1-5 Likert)
+  trustScore  Float @default(0) // (0-100 Raw ML Score)
+
+  // --- OPTIONAL: Counters for Client Trust Score (Future) ---
+  totalBookings     Int @default(0) // transactionCount
+  completedBookings Int @default(0) // completedTransactions
+  cancellations     Int @default(0) // Cancellation logic
+  reviewsGiven      Int @default(0)
+  reviewsReceived   Int @default(0)
+
+  user User @relation(fields: [userId], references: [userId])
+
+  @@map("CLIENT_PROFILES")
+}
+
+model ResolverProfile {
+  resolverProfileId Int     @id @default(autoincrement())
+  userId            Int     @unique
+  bio               String?
+  skills            String?
+
+  // --- API OUTPUT STORAGE ---
+  trustRating Float @default(0) // (1-5 Likert)
+  trustScore  Float @default(0) // (0-100 Raw ML Score)
+
+  // --- COUNTERS FOR FLASK API INPUTS ---
+  totalBookings     Int @default(0) // -> transactionCount
+  completedBookings Int @default(0) // -> completedTransactions
+  cancellations     Int @default(0) // -> Used to calculate cancellation rate (though not a direct API input)
+
+  // Reviews Received by the Resolver
+  reviewsReceivedCount Int @default(0) // -> reviewCount (Total reviews received)
+  totalStarsReceived   Int @default(0) // -> starCount (Sum of all ratings)
+  positiveReviews      Int @default(0) // -> positiveReviews (e.g., ratings 4-5)
+  neutralReviews       Int @default(0) // -> neutralReviews (e.g., rating 3)
+  negativeReviews      Int @default(0) // -> negativeReviews (e.g., ratings 1-2)
+
+  // Portfolio Count
+  approvedPortfolios Int @default(0) // -> portfolioCount (Filter Portfolio on status = APPROVED)
+
+  // Other fields (like reviewsGiven) are not direct inputs to the ML model, but useful to keep
+  reviewsGiven Int @default(0) // Reviews the Resolver has *given* to others
+
+  user User @relation(fields: [userId], references: [userId])
+
+  @@map("RESOLVER_PROFILES")
+}
+
+model Category {
+  id              Int              @id @default(autoincrement())
+  categoryName    String           @unique @db.VarChar(255)
+  description     String?          @db.Text
+  portfolioItems  Portfolio[]
+  services        Service[]
+  serviceRequests ServiceRequest[]
+
+  @@map("CATEGORIES")
+}
+
+model Service {
+  id              Int              @id @default(autoincrement())
+  categoryId      Int
+  serviceName     String           @db.VarChar(255)
+  description     String?          @db.Text
+  category        Category         @relation(fields: [categoryId], references: [id])
+  serviceListings ServiceListing[]
+
+  @@unique([serviceName, categoryId])
+  @@index([categoryId], map: "SERVICES_categoryId_fkey")
+  @@map("SERVICES")
+}
+
+model ServiceListing {
+  id                 Int                 @id @default(autoincrement())
+  serviceId          Int
+  resolverId         Int
+  title              String              @db.VarChar(255)
+  description        String?             @db.Text
+  isFeatured         Boolean             @default(false)
+  maxPrice           Decimal?            @db.Decimal(10, 2)
+  minPrice           Decimal?            @db.Decimal(10, 2)
+  status             ListingStatus       @default(draft)
+  availabilityStatus AvailabilityStatus?
+  location           ServiceLocation?
+  serviceImage       String              @db.Text
+
+  // ADD THESE NEW FIELDS:
+  reviewedById      Int?
+  reviewedAt        DateTime?
+  adminNotes        String?   @db.Text
+  revisionRequested Boolean   @default(false)
+  revisionNotes     String?   @db.Text
+
+  bookingProposals BookingProposal[] @relation("ListingProposals")
+  bookings         Booking[]
+  conversations    Conversation[]    @relation("ListingConversation")
+  reviews          Review[]
+  resolver         User              @relation(fields: [resolverId], references: [userId])
+  service          Service           @relation(fields: [serviceId], references: [id])
+  reports          Report[]          @relation("ReportedListings")
+
+  associatedPortfolios ServiceListingPortfolioItem[]
+
+  @@unique([serviceId, resolverId])
+  @@index([resolverId], map: "SERVICE_LISTINGS_resolverId_fkey")
+  @@index([status])
+  @@index([reviewedById])
+  @@map("SERVICE_LISTINGS")
+}
+
+model Booking {
+  id               Int           @id @default(autoincrement())
+  clientId         Int
+  serviceListingId Int?
+  serviceRequestId Int?          @unique
+  bookingDate      DateTime      @db.Date
+  totalPrice       Decimal       @db.Decimal(10, 2)
+  paymentStatus    String        @db.Char(50)
+  paymentDue       DateTime      @db.Date
+  status           BookingStatus @default(SERVICE_REQUESTED)
+  latestProposalId Int?          @unique
+  startDate        DateTime?
+
+  // WORK COMPLETION TRACKING
+  completedAt           DateTime?  @db.DateTime(0)  // When resolver marks work done
+  clientAcknowledged    Boolean?   @default(false)  // Client accepts/rejects work
+  
+  // BOOKING COMPLETION TRACKING (NEW)
+  paymentCompletedAt          DateTime?  // When all payments are verified
+  bookingCompletedAt          DateTime?  // When both parties confirm final completion
+  clientBookingAcknowledged   Boolean?   @default(false)  // Client confirms booking done
+  resolverBookingAcknowledged Boolean?   @default(false)  // Resolver confirms booking done
+  
+  // REVIEW TRACKING
+  reviewPeriodStartedAt   DateTime?  // When review period officially begins
+  reviewPeriodEndsAt      DateTime?  // 7 days after reviewPeriodStartedAt
+  hasClientReview         Boolean    @default(false)
+  hasResolverReview       Boolean    @default(false)
+  
+  deadline         DateTime?
+
+  conversation Conversation?
+
+  changeRequests  BookingChangeRequest[]
+  client          User                   @relation(fields: [clientId], references: [userId])
+  latestProposal  BookingProposal?       @relation("LatestProposal", fields: [latestProposalId], references: [id])
+  serviceListing  ServiceListing?        @relation(fields: [serviceListingId], references: [id])
+  serviceRequest  ServiceRequest?        @relation(fields: [serviceRequestId], references: [id])
+  contracts       Contract[]             @relation("BookingContracts")
+  payments        Payment[]
+  progressUpdates ProgressUpdate[]
+
+  transactionFeeLogs TransactionFeeLog[]
+
+  paymentPlan PaymentPlan?
+  paymentLogs PaymentLog[] @relation("BookingPaymentLogs")
+
+  @@index([clientId], map: "Booking_clientId_fkey")
+  @@index([serviceListingId], map: "Booking_serviceListingId_fkey")
+}
+
+model BookingProposal {
+  id               Int             @id @default(autoincrement())
+  bookingId        Int?
+  senderId         Int
+  receiverId       Int
+  serviceListingId Int?
+  serviceRequestId Int?
+  description      String          @db.Text
+  price            Decimal         @db.Decimal(10, 2)
+  deadline         DateTime?
+  attachments      String?         @db.Text
+  contractUrl      String?         @db.Text
+  status           ProposalStatus  @default(PENDING)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  startDate        DateTime?
+  declineReason    String?
+  receiver         User            @relation("ReceivedBookingProposals", fields: [receiverId], references: [userId])
+  sender           User            @relation("SentBookingProposals", fields: [senderId], references: [userId])
+  listing          ServiceListing? @relation("ListingProposals", fields: [serviceListingId], references: [id])
+  request          ServiceRequest? @relation("RequestProposals", fields: [serviceRequestId], references: [id])
+  booking          Booking?        @relation("LatestProposal")
+  contracts        Contract[]      @relation("ProposalContracts")
+
+  @@index([receiverId], map: "BOOKING_PROPOSALS_receiverId_fkey")
+  @@index([senderId], map: "BOOKING_PROPOSALS_senderId_fkey")
+  @@index([serviceListingId], map: "BOOKING_PROPOSALS_serviceListingId_fkey")
+  @@index([serviceRequestId], map: "BOOKING_PROPOSALS_serviceRequestId_fkey")
+  @@map("BOOKING_PROPOSALS")
+}
+
+model Contract {
+  id         Int @id @default(autoincrement())
+  bookingId  Int
+  proposalId Int
+
+  receiverId Int? // client
+  receiver   User? @relation("ReceivedContracts", fields: [receiverId], references: [userId])
+
+  providerId Int? // resolver/provider
+  provider   User? @relation("ProvidedContracts", fields: [providerId], references: [userId])
+
+  fileUrl   String   @db.Text
+  createdAt DateTime @default(now())
+  status    String   @default("PENDING")
+  text      String   @db.Text
+  
+  // ADD THESE TWO FIELDS:
+  respondedAt   DateTime? // Timestamp when contract was agreed/declined
+  signatureData String?   @db.Text // Base64 signature image
+
+  booking  Booking         @relation("BookingContracts", fields: [bookingId], references: [id])
+  proposal BookingProposal @relation("ProposalContracts", fields: [proposalId], references: [id])
+
+  @@index([bookingId], map: "CONTRACTS_bookingId_fkey")
+  @@index([proposalId], map: "CONTRACTS_proposalId_fkey")
+  @@index([receiverId], map: "CONTRACTS_receiverId_fkey")
+  @@index([providerId], map: "CONTRACTS_providerId_fkey")
+  @@map("CONTRACTS")
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  bookingId     Int
+  paymentAmount Decimal  @db.Decimal(10, 2)
+  paymentDate   DateTime @db.Date
+  paymentMethod String   @db.VarChar(100)
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId], map: "PAYMENTS_bookingId_fkey")
+  @@map("PAYMENTS")
+}
+
+model ServiceRequest {
+  id               Int               @id @default(autoincrement())
+  clientId         Int
+  categoryId       Int
+  resolverId       Int?
+  title            String            @db.VarChar(255)
+  description      String?           @db.Text
+  requestedDate    DateTime          @default(now()) @db.DateTime(0)
+  status           String            @db.Char(50)
+  minPrice         Decimal?          @db.Decimal(10, 2)
+  maxPrice         Decimal?          @db.Decimal(10, 2)
+  deadline         DateTime?         @db.DateTime(0)
+  bookingProposals BookingProposal[] @relation("RequestProposals")
+
+  booking  Booking?
+  comments Comment[]
+  reports  Report[]  @relation("ReportedRequests")
+
+  conversations Conversation[] @relation("RequestConversation")
+  reviews       Review[] // Add this line
+  category      Category       @relation(fields: [categoryId], references: [id])
+  client        User           @relation(fields: [clientId], references: [userId])
+
+  @@index([categoryId], map: "SERVICE_REQUESTS_categoryId_fkey")
+  @@index([clientId], map: "SERVICE_REQUESTS_clientId_fkey")
+  @@index([resolverId], map: "SERVICE_REQUESTS_resolverId_fkey")
+  @@map("SERVICE_REQUESTS")
+}
+
+model Report {
+  id                Int          @id @default(autoincrement())
+  reporterId        Int
+  reportedUserId    Int
+  reportTitle       String       @db.VarChar(255)
+  reportDescription String?      @db.Text
+  reportDate        DateTime     @default(now()) @db.DateTime(0)
+  resolution        String?      @db.Text
+  status            ReportStatus @default(PENDING)
+  adminId           Int?
+
+  // Add these new fields:
+  serviceListingId Int?
+  serviceRequestId Int?
+
+  reviewedAt DateTime?
+  resolvedAt DateTime?
+
+  admin        User?         @relation("AdminReports", fields: [adminId], references: [userId])
+  reportedUser User          @relation("ReportedReports", fields: [reportedUserId], references: [userId])
+  reporter     User          @relation("ReporterReports", fields: [reporterId], references: [userId])
+  contentFlags ContentFlag[]
+
+  // Add these new relations:
+  serviceListing ServiceListing? @relation("ReportedListings", fields: [serviceListingId], references: [id])
+  serviceRequest ServiceRequest? @relation("ReportedRequests", fields: [serviceRequestId], references: [id])
+
+  @@index([adminId], map: "REPORTS_adminId_fkey")
+  @@index([reportedUserId], map: "REPORTS_reportedUserId_fkey")
+  @@index([reporterId], map: "REPORTS_reporterId_fkey")
+  @@index([status])
+  @@index([serviceListingId])
+  @@index([serviceRequestId])
+  @@map("REPORTS")
+}
+
+model Conversation {
+  conversationId  Int             @id @default(autoincrement())
+  initiatedById   Int
+  createdAt       DateTime        @default(now())
+  initiatedByType InitiatorType   @default(CLIENT)
+  listingId       Int?
+  requestId       Int?
+  bookingId       Int?            @unique
+  booking         Booking?        @relation(fields: [bookingId], references: [id])
+  listing         ServiceListing? @relation("ListingConversation", fields: [listingId], references: [id])
+  request         ServiceRequest? @relation("RequestConversation", fields: [requestId], references: [id])
+  messages        Message[]
+  participants    User[]          @relation("ConversationParticipants")
+
+  @@index([listingId], map: "CONVERSATIONS_listingId_fkey")
+  @@index([requestId], map: "CONVERSATIONS_requestId_fkey")
+  @@map("CONVERSATIONS")
+}
+
+model Message {
+  id             Int           @id @default(autoincrement())
+  senderId       Int
+  receiverId     Int
+  messageContent String        @db.Text
+  sentDate       DateTime      @default(now()) @db.DateTime(0)
+  readStatus     Boolean       @default(false)
+  conversationId Int?
+  conversation   Conversation? @relation(fields: [conversationId], references: [conversationId])
+  receiver       User          @relation("ReceivedMessages", fields: [receiverId], references: [userId])
+  sender         User          @relation("SentMessages", fields: [senderId], references: [userId])
+
+  @@index([conversationId], map: "MESSAGES_conversationId_fkey")
+  @@index([receiverId], map: "MESSAGES_receiverId_fkey")
+  @@index([senderId], map: "MESSAGES_senderId_fkey")
+  @@map("MESSAGES")
+}
+
+model Comment {
+  id               Int             @id @default(autoincrement())
+  parentCommentId  Int?
+  commenterId      Int
+  serviceRequestId Int?
+  commentDate      DateTime        @default(now()) @db.DateTime(0)
+  role             String
+  commentContent   String          @db.Text
+  commenter        User            @relation(fields: [commenterId], references: [userId])
+  parentComment    Comment?        @relation("ReplyComments", fields: [parentCommentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies          Comment[]       @relation("ReplyComments")
+  serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
+
+  @@index([commenterId], map: "COMMENTS_commenterId_fkey")
+  @@index([parentCommentId], map: "COMMENTS_parentCommentId_fkey")
+  @@index([serviceRequestId], map: "COMMENTS_serviceRequestId_fkey")
+  @@map("COMMENTS")
+}
+
+model Review {
+  id               Int             @id @default(autoincrement())
+  reviewerId       Int
+  reviewedUserId   Int
+  serviceListingId Int? // Make optional
+  serviceRequestId Int? // Add new field
+  reviewText       String?         @db.Text
+  rating           Int
+  reviewDate       DateTime        @default(now()) @db.DateTime(0)
+  reviewedUser     User            @relation("ReviewsReceived", fields: [reviewedUserId], references: [userId])
+  reviewer         User            @relation("ReviewsGiven", fields: [reviewerId], references: [userId])
+  serviceListing   ServiceListing? @relation(fields: [serviceListingId], references: [id])
+  serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
+
+  @@index([reviewedUserId], map: "REVIEWS_reviewedUserId_fkey")
+  @@index([reviewerId], map: "REVIEWS_reviewerId_fkey")
+  @@index([serviceListingId], map: "REVIEWS_serviceListingId_fkey")
+  @@index([serviceRequestId], map: "REVIEWS_serviceRequestId_fkey") // Add new index
+  @@map("REVIEWS")
+}
+
+model Portfolio {
+  id          Int             @id @default(autoincrement())
+  resolverId  Int
+  categoryId  Int
+  itemName    String          @db.VarChar(255)
+  description String?         @db.Text
+  status      PortfolioStatus @default(PENDING_APPROVAL)
+  uploadDate  DateTime        @default(now()) @db.DateTime(0)
+  updatedAt   DateTime        @updatedAt
+
+  // ADD THESE NEW FIELDS:
+  reviewedById      Int?
+  reviewedAt        DateTime?
+  adminNotes        String?   @db.Text
+  revisionRequested Boolean   @default(false)
+  revisionNotes     String?   @db.Text
+
+  category            Category                      @relation(fields: [categoryId], references: [id])
+  resolver            User                          @relation(fields: [resolverId], references: [userId])
+  portfolioFiles      PortfolioFile[]
+  listingAssociations ServiceListingPortfolioItem[]
+
+  @@index([categoryId], map: "PORTFOLIOS_categoryId_fkey")
+  @@index([resolverId], map: "PORTFOLIOS_resolverId_fkey")
+  @@index([status])
+  @@index([reviewedById])
+  @@map("PORTFOLIOS")
+}
+
+model PortfolioFile {
+  id          Int       @id @default(autoincrement())
+  portfolioId Int
+  url         String    @db.Text
+  fileType    String
+  order       Int
+  isThumbnail Boolean   @default(false)
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@index([portfolioId], map: "PORTFOLIO_FILES_portfolioId_fkey")
+  @@map("PORTFOLIO_FILES")
+}
+
+model ServiceListingPortfolioItem {
+  serviceListingId Int
+  portfolioItemId  Int
+  portfolioItem    Portfolio      @relation(fields: [portfolioItemId], references: [id])
+  serviceListing   ServiceListing @relation(fields: [serviceListingId], references: [id])
+
+  @@id([serviceListingId, portfolioItemId])
+  @@index([portfolioItemId], map: "SERVICE_LISTING_PORTFOLIO_ITEMS_portfolioItemId_fkey")
+  @@map("SERVICE_LISTING_PORTFOLIO_ITEMS")
+}
+
+model BookingChangeRequest {
+  id           Int          @id @default(autoincrement())
+  bookingId    Int
+  requesterId  Int
+  type         ChangeType
+  reason       String?      @db.Text
+  newPrice     Decimal?     @db.Decimal(10, 2)
+  newDeadline  DateTime?
+  status       ChangeStatus @default(PENDING)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  newStartDate DateTime?
+  booking      Booking      @relation(fields: [bookingId], references: [id])
+  requester    User         @relation("RequestedChanges", fields: [requesterId], references: [userId])
+
+  @@index([bookingId], map: "BOOKING_CHANGE_REQUESTS_bookingId_fkey")
+  @@index([requesterId], map: "BOOKING_CHANGE_REQUESTS_requesterId_fkey")
+  @@map("BOOKING_CHANGE_REQUESTS")
+}
+
+model ProgressUpdate {
+  id        Int            @id @default(autoincrement())
+  bookingId Int
+  updaterId Int
+  message   String?        @db.Text
+  imageUrl  String?        @db.Text
+  videoUrl  String?        @db.Text
+  fileUrl   String?        @db.Text
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  status    ProgressStatus @default(AWAITING_START)
+  booking   Booking        @relation(fields: [bookingId], references: [id])
+  updater   User           @relation(fields: [updaterId], references: [userId])
+
+  @@index([bookingId], map: "PROGRESS_UPDATES_bookingId_fkey")
+  @@index([updaterId], map: "PROGRESS_UPDATES_updaterId_fkey")
+  @@map("PROGRESS_UPDATES")
+}
+
+model AdminAction {
+  id         Int             @id @default(autoincrement())
+  adminId    Int
+  action     AdminActionType
+  targetType TargetType
+  targetId   Int
+  reason     String?         @db.Text
+  details    String?         @db.Text
+  metadata   String?         @db.Text
+  createdAt  DateTime        @default(now())
+  admin      User            @relation("AdminActions", fields: [adminId], references: [userId])
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("ADMIN_ACTIONS")
+}
+
+model UserModeration {
+  id          Int              @id @default(autoincrement())
+  userId      Int
+  moderatedBy Int
+  action      ModerationAction
+  reason      String           @db.Text
+  startDate   DateTime         @default(now())
+  endDate     DateTime?
+  isActive    Boolean          @default(true)
+  notes       String?          @db.Text
+  user        User             @relation("ModeratedUser", fields: [userId], references: [userId])
+  moderator   User             @relation("Moderator", fields: [moderatedBy], references: [userId])
+
+  @@index([userId])
+  @@index([moderatedBy])
+  @@index([isActive])
+  @@map("USER_MODERATIONS")
+}
+
+model ContentFlag {
+  id          Int        @id @default(autoincrement())
+  reportId    Int?
+  flaggedType TargetType
+  flaggedId   Int
+  flaggedBy   Int
+  reason      String     @db.Text
+  status      FlagStatus @default(PENDING)
+  reviewedBy  Int?
+  reviewedAt  DateTime?
+  resolution  String?    @db.Text
+  createdAt   DateTime   @default(now())
+
+  report   Report? @relation(fields: [reportId], references: [id])
+  flagger  User    @relation("ContentFlagger", fields: [flaggedBy], references: [userId])
+  reviewer User?   @relation("ContentReviewer", fields: [reviewedBy], references: [userId])
+
+  @@index([reportId])
+  @@index([flaggedType, flaggedId])
+  @@index([flaggedBy])
+  @@index([reviewedBy])
+  @@index([status])
+  @@map("CONTENT_FLAGS")
+}
+
+model PaymentPlan {
+  id          Int      @id @default(autoincrement())
+  bookingId   Int      @unique
+  totalAmount Decimal  @db.Decimal(10, 2)
+  createdBy   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  booking    Booking            @relation(fields: [bookingId], references: [id])
+  creator    User               @relation("CreatedPaymentPlans", fields: [createdBy], references: [userId])
+  milestones PaymentMilestone[]
+
+  @@index([bookingId], map: "PAYMENT_PLANS_bookingId_fkey")
+  @@index([createdBy], map: "PAYMENT_PLANS_createdBy_fkey")
+  @@map("PAYMENT_PLANS")
+}
+
+model PaymentMilestone {
+  id            Int       @id @default(autoincrement())
+  paymentPlanId Int
+  name          String    @db.VarChar(255)
+  amount        Decimal   @db.Decimal(10, 2)
+  percentage    Float
+  dueDate       DateTime? @db.Date
+  required      Boolean   @default(true)
+  order         Int       @default(1)
+  createdAt     DateTime  @default(now())
+
+  paymentPlan PaymentPlan  @relation(fields: [paymentPlanId], references: [id])
+  payments    PaymentLog[]
+
+  @@index([paymentPlanId], map: "PAYMENT_MILESTONES_paymentPlanId_fkey")
+  @@map("PAYMENT_MILESTONES")
+}
+
+model PaymentLog {
+  id                     Int       @id @default(autoincrement())
+  milestoneId            Int
+  bookingId              Int
+  loggedBy               Int
+  amount                 Decimal   @db.Decimal(10, 2)
+  paymentMethod          String?   @db.VarChar(100)
+  notes                  String?   @db.Text
+  loggedAt               DateTime  @default(now())
+  providerAcknowledged   Boolean   @default(false)
+  providerAcknowledgedAt DateTime?
+  clientAcknowledged     Boolean   @default(false)
+  clientAcknowledgedAt   DateTime?
+
+  milestone   PaymentMilestone    @relation(fields: [milestoneId], references: [id])
+  booking     Booking             @relation("BookingPaymentLogs", fields: [bookingId], references: [id])
+  logger      User                @relation("LoggedPayments", fields: [loggedBy], references: [userId])
+  attachments PaymentAttachment[]
+
+  @@index([milestoneId], map: "PAYMENT_LOGS_milestoneId_fkey")
+  @@index([bookingId], map: "PAYMENT_LOGS_bookingId_fkey")
+  @@index([loggedBy], map: "PAYMENT_LOGS_loggedBy_fkey")
+  @@map("PAYMENT_LOGS")
+}
+
+model PaymentAttachment {
+  id           Int      @id @default(autoincrement())
+  paymentLogId Int
+  fileName     String   @db.VarChar(255)
+  fileUrl      String   @db.Text
+  fileType     String   @db.VarChar(50)
+  fileSize     Int?
+  uploadedAt   DateTime @default(now())
+
+  paymentLog PaymentLog @relation(fields: [paymentLogId], references: [id])
+
+  @@index([paymentLogId], map: "PAYMENT_ATTACHMENTS_paymentLogId_fkey")
+  @@map("PAYMENT_ATTACHMENTS")
+}
+
+model PlatformSetting {
+  id               Int      @id @default(1) // singleton
+  transactionFeeOn Boolean  @default(false)
+  feePercentage    Float    @default(3.0) // optional for flexibility
+  updatedAt        DateTime @updatedAt
+
+  @@map("PLATFORM_SETTING")
+}
+
+model TransactionFeeLog {
+  id        Int      @id @default(autoincrement())
+  bookingId Int
+  userId    Int
+  feeAmount Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [userId])
+
+  @@index([bookingId])
+  @@index([userId])
+
+  @@map("TRANSACTION_FEE_LOG")
+}
+
+enum RoleName {
+  client
+  resolver
+  admin
+}
+
+enum AvailabilityStatus {
+  available
+  busy
+  inactive
+}
+
+enum ServiceLocation {
+  onsite
+  offsite
+}
+
+enum ListingStatus {
+  draft
+  on_review
+  approved
+  rejected
+}
+
+enum BookingStatus {
+  SERVICE_REQUESTED
+  SERVICE_PROPOSAL_SENT
+  NEGOTIATING
+  CONFIRMED
+  DECLINED
+  CANCELED
+  IN_PROGRESS
+  IDLE
+  WORK_COMPLETED           // NEW: Work done, awaiting payment completion
+  PAYMENT_COMPLETED        // NEW: Payment verified, awaiting final booking confirmation
+  BOOKING_COMPLETED        // NEW: Both parties confirmed, ready for review
+  AWAITING_REVIEW
+  REVIEW_COMPLETED
+  AWAITING_PAYMENT
+  COMPLETED
+
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  MODIFIED
+}
+
+enum InitiatorType {
+  CLIENT
+  RESOLVER
+  ADMIN
+}
+
+enum PortfolioStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum ChangeType {
+  CANCELLATION
+  ALTERATION
+}
+
+enum ChangeStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+enum ProgressStatus {
+  AWAITING_START
+  IN_PROGRESS
+  IDLE
+  CANCELED
+  COMPLETED
+  AWAITING_REVIEW
+  REVIEW_COMPLETED
+  PAYMENT_COMPLETED
+}
+
+enum AdminActionType {
+  APPROVE_PORTFOLIO
+  DECLINE_PORTFOLIO
+  REQUEST_PORTFOLIO_REVISION
+  APPROVE_LISTING
+  DECLINE_LISTING
+  REQUEST_LISTING_REVISION
+  RESOLVE_REPORT
+  WARN_USER
+  SUSPEND_USER
+  DELETE_USER
+  RESTORE_USER
+  DELETE_CONTENT
+  RESTORE_CONTENT
+  CREATE_ADMIN
+  REMOVE_ADMIN
+  VIEW_MESSAGES
+}
+
+enum TargetType {
+  PORTFOLIO
+  SERVICE_LISTING
+  REPORT
+  USER
+  MESSAGE
+  SERVICE_REQUEST
+  BOOKING
+  REVIEW
+  COMMENT
+}
+
+enum ModerationAction {
+  WARNING
+  TEMPORARY_SUSPENSION
+  PERMANENT_SUSPENSION
+  ACCOUNT_DELETION
+  CONTENT_REMOVAL
+}
+
+enum FlagStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+// Add this enum
+enum ReportStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}

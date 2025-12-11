@@ -1,0 +1,86 @@
+-- CreateTable
+CREATE TABLE `PAYMENT_PLANS` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `bookingId` INTEGER NOT NULL,
+    `totalAmount` DECIMAL(10, 2) NOT NULL,
+    `createdBy` INTEGER NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `PAYMENT_PLANS_bookingId_key`(`bookingId`),
+    INDEX `PAYMENT_PLANS_bookingId_fkey`(`bookingId`),
+    INDEX `PAYMENT_PLANS_createdBy_fkey`(`createdBy`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PAYMENT_MILESTONES` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `paymentPlanId` INTEGER NOT NULL,
+    `name` VARCHAR(255) NOT NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    `percentage` DOUBLE NOT NULL,
+    `dueDate` DATE NULL,
+    `required` BOOLEAN NOT NULL DEFAULT true,
+    `order` INTEGER NOT NULL DEFAULT 1,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `PAYMENT_MILESTONES_paymentPlanId_fkey`(`paymentPlanId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PAYMENT_LOGS` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `milestoneId` INTEGER NOT NULL,
+    `bookingId` INTEGER NOT NULL,
+    `loggedBy` INTEGER NOT NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    `paymentMethod` VARCHAR(100) NULL,
+    `notes` TEXT NULL,
+    `loggedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `providerAcknowledged` BOOLEAN NOT NULL DEFAULT false,
+    `providerAcknowledgedAt` DATETIME(3) NULL,
+    `clientAcknowledged` BOOLEAN NOT NULL DEFAULT false,
+    `clientAcknowledgedAt` DATETIME(3) NULL,
+
+    INDEX `PAYMENT_LOGS_milestoneId_fkey`(`milestoneId`),
+    INDEX `PAYMENT_LOGS_bookingId_fkey`(`bookingId`),
+    INDEX `PAYMENT_LOGS_loggedBy_fkey`(`loggedBy`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PAYMENT_ATTACHMENTS` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `paymentLogId` INTEGER NOT NULL,
+    `fileName` VARCHAR(255) NOT NULL,
+    `fileUrl` TEXT NOT NULL,
+    `fileType` VARCHAR(50) NOT NULL,
+    `fileSize` INTEGER NULL,
+    `uploadedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `PAYMENT_ATTACHMENTS_paymentLogId_fkey`(`paymentLogId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENT_PLANS` ADD CONSTRAINT `PAYMENT_PLANS_bookingId_fkey` FOREIGN KEY (`bookingId`) REFERENCES `Booking`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENT_PLANS` ADD CONSTRAINT `PAYMENT_PLANS_createdBy_fkey` FOREIGN KEY (`createdBy`) REFERENCES `USERS`(`userId`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENT_MILESTONES` ADD CONSTRAINT `PAYMENT_MILESTONES_paymentPlanId_fkey` FOREIGN KEY (`paymentPlanId`) REFERENCES `PAYMENT_PLANS`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENT_LOGS` ADD CONSTRAINT `PAYMENT_LOGS_milestoneId_fkey` FOREIGN KEY (`milestoneId`) REFERENCES `PAYMENT_MILESTONES`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENT_LOGS` ADD CONSTRAINT `PAYMENT_LOGS_bookingId_fkey` FOREIGN KEY (`bookingId`) REFERENCES `Booking`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENT_LOGS` ADD CONSTRAINT `PAYMENT_LOGS_loggedBy_fkey` FOREIGN KEY (`loggedBy`) REFERENCES `USERS`(`userId`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENT_ATTACHMENTS` ADD CONSTRAINT `PAYMENT_ATTACHMENTS_paymentLogId_fkey` FOREIGN KEY (`paymentLogId`) REFERENCES `PAYMENT_LOGS`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
